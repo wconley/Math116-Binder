@@ -3,6 +3,8 @@
 
 from itertools import cycle
 from collections import Counter
+import functools
+import operator
 import re
 
 ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
@@ -137,5 +139,75 @@ def inverse(a, n):
     if d == 1:
         return x % n
     raise ValueError("{} is not invertible modulo {}".format(a, n))
+
+
+def crt(residues, moduli):
+    """Performs the Chinese Remainder Theorem
+
+    Returns a pair (x, n) where n is the product of the moduli in the second 
+    argument, and x is congruent to each residue in the first argument modulo 
+    the corresponding modulus from the second argument. 
+
+    Note that if you have the residues and moduli already paired off, you can 
+    just "un-pair" them with zip, e.g.: 
+        crt(*zip((2, 5), (4, 7), (1, 11))) # returns (67, 385)
+
+    This will raise ValueError if the moduli are not pairwise relatively prime. 
+    """
+
+    bigresidue = 0
+    bigmodulus = functools.reduce(operator.mul, moduli, 1)
+    for a, m in zip(residues, moduli):
+        y = bigmodulus // m
+        z = inverse(y, m) # This will raise ValueError if y is not coprime to m
+        bigresidue = (bigresidue + a*y*z) % bigmodulus
+    return bigresidue, bigmodulus
+
+
+def crt_basic(a1, a2, m1, m2):
+    """Performs the Chinese Remainder Theorem on a system of TWO congruences
+
+    This function ONLY WORKS with a system of two congruences, and only works 
+    if the two moduli m1 and m2 are coprime. In that case, the modulus of the 
+    result should just be m1 * m2, so this function doesn't bother returning 
+    that modulus. It just computes and returns a residue x that is congruent to 
+    a1 modulo m1 and is congruent to a2 modulo m2. 
+
+    This will raise ValueError if the moduli m1 and m2 are not relatively prime. 
+    """
+
+    g, i1, i2 = euclidean(m1, m2)
+    if g == 1:
+        return (a1 * m2 * i2 + a2 * m1 * i1) % (m1 * m2)
+    raise ValueError(f"{m1} and {m2} are not coprime")
+
+
+def crt_general(residues, moduli):
+    """Performs the Chinese Remainder Theorem
+
+    Returns a pair (x, n) where n is the least common multiple of the moduli in 
+    the second argument, and x is congruent to each residue in the first 
+    argument modulo the corresponding modulus from the second argument. 
+
+    Note that if you have the residues and moduli already paired off, you can 
+    just "un-pair" them with zip, e.g.: 
+        crt_general(*zip((2, 5), (4, 7), (1, 11))) # returns (67, 385)
+
+    This version works even if the moduli are not pairwise relatively prime, if 
+    there is a solution. It will raise ValueError if there is no solution. 
+    """
+
+    a1 = 0
+    m1 = 1
+    for a2, m2 in zip(residues, moduli):
+        g, i1, i2 = euclidean(m1, m2)
+        q1, r1 = divmod(a1, g)
+        q2, r2 = divmod(a2, g)
+        if r1 != r2:
+            raise ValueError("No solution to this system of congruences")
+        new_m = m1 * m2 // g
+        a1 = (q1 * m2 * i2 + q2 * m1 * i1 + r1) % new_m
+        m1 = new_m
+    return a1, m1
 
 
