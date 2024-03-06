@@ -229,6 +229,136 @@ def crt_general(residues, moduli):
     return a1, m1
 
 
+def pseudoprime(n, base):
+    """Perform the Miller–Rabin (strong pseudoprime) test on n
+
+    Note that in some (rare) cases, the Miller–Rabin test can actually produce 
+    a non-trivial factorization of n, however this function does not return 
+    those factors. If you want to run this same algorithm, but obtain that 
+    factorization when possible, you can use the 'universal_exponent_factor' 
+    function in this library, and pass it n and n - 1. But note that it is 
+    likely to raise ValueError if n is not prime. See its documentation. 
+
+    Returns True or False
+    If this returns True, n is either prime or a strong pseudoprime for 'base'. 
+    If this returns False, n is guaranteed to be composite. 
+    """
+
+    if n == 2:
+        return True
+    if n % 2 == 0:
+        return False
+    exp = 1
+    oddpart = (n - 1) // 2
+    while oddpart % 2 == 0:
+        exp += 1
+        oddpart //= 2
+    x = pow(base, oddpart, n)
+    if x == 1 or x == n - 1:
+        return True
+    for i in range(1, exp):
+        newx = x*x % n
+        if newx == n - 1:
+            return True
+        if newx == 1:
+            return False
+        x = newx
+    return False
+
+
+def is_probably_prime(n, bases=(2, 3, 5, 7, 11)):
+    "Check if n is prime, by running Miller–Rabin test for several bases"
+    return all(pseudoprime(n, base) for base in bases)
+
+
+### Factoring algorithms ###
+
+def factor(n):
+    "Returns the factorization of n by trial division, using the PRIMES list"
+
+    if n == 0:
+        raise ValueError("Cannot factor 0")
+    factors = Counter()
+    if n < 0:
+        n = -n
+        factors[-1] = 1
+    for p in PRIMES:
+        while n % p == 0:
+            factors[p] += 1
+            n //= p
+        if n == 1:
+            break
+    else:
+        raise ValueError("n has a 'large' prime factor. Known factorization "
+                         f"{factors}. Remaining unfactored part {n}")
+    return factors
+
+
+def universal_exponent_factor(n, exponent, bases=(2, 3, 5, 7, 11)):
+    """Factor 'n', given that 'exponent' is a universal exponent for n
+
+    A universal exponent is a positive integer e for which 
+        b^e = 1 (mod n)
+    for any b that is relatively prime to n. If n is prime, then e is a 
+    universal exponent for n iff e is a multiple of n - 1 (Fermat's Little 
+    Theorem for one direction, existence of primitive roots for the other). 
+    More generally, for any n, \phi(n) is a universal exponent for n (Euler's 
+    Theorem). 
+
+    This algorithm is not guaranteed to produce a factorization of n, but it's 
+    very likely to. If it cannot find one, it will return None. In particular, 
+    providing this function with a number n, and n - 1 as the (supposed) 
+    universal exponent will do the equivalent of the Miller–Rabin (strong 
+    pseudoprime) test on n for the bases in 'bases'. In that case, if the 
+    function returns None, then the number is very very likely to be prime. 
+    (Note that when used this way, this function will most likely raise 
+    ValueError if n is not prime.) 
+
+    Returns a nontrivial factor of n, or None if it can't find one
+    Raises ValueError if it is found that 'exponent' is not universal
+    """
+
+    oddpart = exponent
+    exp = 0
+    while oddpart % 2 == 0:
+        oddpart //= 2
+        exp += 1
+    for b in bases:
+        if n == b:
+            return None
+        if n % b == 0:
+            return b
+        x = pow(b, oddpart, n)
+        for i in range(exp):
+            if x == 1 or x == n - 1:
+                break
+            newx = x*x % n
+            if newx == 1:
+                return gcd(x - 1, n)
+            x = newx
+        else:
+            raise ValueError(f"{exponent} is not a universal exponent for {n}")
+
+
+def pollard_factor(n, bases=(2,), bound=100000):
+    "Runs the Pollard p - 1 factoring algorithm on n"
+
+    for b in bases:
+        power = b
+        for k in range(2, bound):
+            power = pow(power, k, n)
+            if k % 200 == 0: # Every 200th step, check status
+                if power == 1:
+                    break # We could try the exponent factoring algorithm here, 
+                          # but that would require computing factorial(k)
+                factor = gcd(power - 1, n)
+                if factor == n:
+                    break
+                if factor != 1:
+                    return factor
+    return None
+
+
 # A list of all primes less than 10,000
 PRIMES = [
     2, 3, 5, 7, 
